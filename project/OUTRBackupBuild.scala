@@ -1,6 +1,9 @@
 import sbt._
 import Keys._
 
+import sbtassembly.Plugin._
+import AssemblyKeys._
+
 object OUTRBackupBuild extends Build {
   val baseSettings = Defaults.defaultSettings ++ Seq(
     version := "1.0.0-SNAPSHOT",
@@ -25,10 +28,13 @@ object OUTRBackupBuild extends Build {
     testOptions in Test += Tests.Argument("sequential")
   )
 
-  private def createSettings(_name: String) = baseSettings ++ Seq(name := _name)
+  private def createSettings(_name: String) = baseSettings ++ assemblySettings ++ Seq(name := _name)
 
   // Aggregator
   lazy val root = Project("root", file("."), settings = createSettings("outrbackup"))
+    .settings(jarName in assembly <<= version map {
+      (v: String) => "outrbackup-%s.jar".format(v)
+    })
 }
 
 object Dependencies {

@@ -24,17 +24,17 @@ object OUTRBackup {
 
   def backup(origin: File, destination: File) = {
     val instance = new BackupInstance(origin.getCanonicalFile, destination.getCanonicalFile)
-    println("Indexing changes...")
+    println("\tIndexing changes...")
     val indexedIn = Time.elapsed {
       instance.index(threads = 8)
     }
-    println(s"Indexed in $indexedIn seconds")
-    instance.dump()
-    println("Synchronizing changes...")
+    println(s"\tIndexed in $indexedIn seconds")
+//    instance.dump()
+    println("\tSynchronizing changes...")
     val syncIn = Time.elapsed {
       instance.sync()
     }
-    println(s"Synchronized in $syncIn seconds")
+    println(s"\tSynchronized in $syncIn seconds")
     instance.dump()
   }
 }
@@ -140,9 +140,9 @@ class BackupInstance(originDirectory: File, destinationDirectory: File) extends 
   }
 
   def dump() = {
-    println(s"Files Examined: ${statFiles()}, Directories Examined: ${statDirectories()}")
-    println(s"Directories - Create: ${statDirectoriesToCreate()}, Update: ${statDirectoriesToUpdate()}, Delete: ${statDirectoriesToDelete()}")
-    println(s"Files - Create: ${statFilesToCreate()}, Update: ${statFilesToUpdate()}, Delete: ${statFilesToDelete()}")
+    println(s"\tFiles Examined: ${statFiles()}, Directories Examined: ${statDirectories()}")
+    println(s"\tDirectories - Create: ${statDirectoriesToCreate()}, Update: ${statDirectoriesToUpdate()}, Delete: ${statDirectoriesToDelete()}")
+    println(s"\tFiles - Create: ${statFilesToCreate()}, Update: ${statFilesToUpdate()}, Delete: ${statFilesToDelete()}")
   }
 
   @tailrec
@@ -156,19 +156,19 @@ class BackupInstance(originDirectory: File, destinationDirectory: File) extends 
             case o => add(FileOperation(o, origin2Destination(o), Operation.Create))
           }
         } else {
-          print(s"* Create: ${fo.origin.getAbsolutePath} to ${fo.destination.getAbsolutePath} ... ")
+          print(s"\t\t* Create: ${fo.origin.getAbsolutePath} to ${fo.destination.getAbsolutePath} ... ")
           IO.copy(fo.origin, fo.destination)
           fo.destination.setLastModified(fo.origin.lastModified())
           println("COMPLETE")
         }
         case Operation.Update => {
-          print(s"* Update: ${fo.origin.getAbsolutePath} to ${fo.destination.getAbsolutePath} ... ")
+          print(s"\t\t* Update: ${fo.origin.getAbsolutePath} to ${fo.destination.getAbsolutePath} ... ")
           IO.copy(fo.origin, fo.destination)
           fo.destination.setLastModified(fo.origin.lastModified())
           println("COMPLETE")
         }
         case Operation.Delete => {
-          print(s"* Delete: ${fo.destination.getAbsolutePath} ... ")
+          print(s"\t\t* Delete: ${fo.destination.getAbsolutePath} ... ")
           IO.delete(fo.destination)
           println("COMPLETE")
         }
