@@ -1,17 +1,17 @@
 import sbt._
 import Keys._
 
-import sbtassembly.Plugin._
-import AssemblyKeys._
+import sbtassembly.AssemblyKeys._
+import sbtassembly._
+import sbtassembly.AssemblyPlugin._
 
 object OUTRBackupBuild extends Build {
   val baseSettings = Defaults.defaultSettings ++ Seq(
     version := "1.0.0-SNAPSHOT",
     organization := "com.outr.backup",
-    scalaVersion := "2.10.3",
+    scalaVersion := "2.11.5",
     libraryDependencies ++= Seq(
-      Dependencies.PowerScalaProperty,
-      Dependencies.Specs2
+      Dependencies.PowerScalaProperty
     ),
     scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature"),
     resolvers ++= Seq("Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/"),
@@ -38,8 +38,7 @@ object OUTRBackupBuild extends Build {
 }
 
 object Dependencies {
-  private val PowerScalaVersion = "1.6.3-SNAPSHOT"
+  private val PowerScalaVersion = "1.6.8-SNAPSHOT"
 
   val PowerScalaProperty = "org.powerscala" %% "powerscala-property" % PowerScalaVersion
-  val Specs2 = "org.specs2" %% "specs2" % "2.2.3" % "test"
 }

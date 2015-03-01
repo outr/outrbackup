@@ -2,6 +2,7 @@ package com.outr.backup
 
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicLong
 import org.powerscala.event.Listenable
 import org.powerscala.enum.{Enumerated, EnumEntry}
 import scala.annotation.tailrec
@@ -51,6 +52,8 @@ class BackupInstance(originDirectory: File, destinationDirectory: File) extends 
   val statFilesToCreate = new AtomicInt(0)
   val statFilesToUpdate = new AtomicInt(0)
   val statFilesToDelete = new AtomicInt(0)
+  val statDataToCopy = new AtomicLong(0L)
+  val statDataCopied = new AtomicLong(0L)
 
   private val fileOperations = new ConcurrentLinkedQueue[FileOperation]()
   def add(operation: FileOperation) = {
@@ -63,8 +66,14 @@ class BackupInstance(originDirectory: File, destinationDirectory: File) extends 
       }
     } else {
       operation.operation match {
-        case Operation.Create => statFilesToCreate += 1
-        case Operation.Update => statFilesToUpdate += 1
+        case Operation.Create => {
+          statDataToCopy.addAndGet(operation.origin.length())
+          statFilesToCreate += 1
+        }
+        case Operation.Update => {
+          statDataToCopy.addAndGet(operation.origin.length())
+          statFilesToUpdate += 1
+        }
         case Operation.Delete => statFilesToDelete += 1
       }
     }
@@ -110,17 +119,21 @@ class BackupInstance(originDirectory: File, destinationDirectory: File) extends 
           add(FileOperation(origin, destination, Operation.Create))
         } else {
           // Check the origin list of files to make sure they exist
-          origin.listFiles().foreach {
-            case o if o.isDirectory => directoriesToIndex.add(o)
-            case o => {
-              statFiles += 1
-              val d = origin2Destination(o)
-              if (!d.exists()) {
-                add(FileOperation(o, d, Operation.Create))
-              } else if (d.lastModified() != o.lastModified()) {
-                add(FileOperation(o, d, Operation.Update))
+          try {
+            origin.listFiles().foreach {
+              case o if o.isDirectory => directoriesToIndex.add(o)
+              case o => {
+                statFiles += 1
+                val d = origin2Destination(o)
+                if (!d.exists()) {
+                  add(FileOperation(o, d, Operation.Create))
+                } else if (d.lastModified() != o.lastModified() || d.length() != o.length()) {
+                  add(FileOperation(o, d, Operation.Update))
+                }
               }
             }
+          } catch {
+            case t: Throwable => throw new RuntimeException(s"Failed to process origin: ${origin.getName}.", t)
           }
           // Check the destination list of files to remove ones that don't exist on the origin
           destination.listFiles().foreach {
@@ -149,29 +162,40 @@ class BackupInstance(originDirectory: File, destinationDirectory: File) extends 
   final def sync(): Unit = fileOperations.poll() match {
     case null => // Nothing left to do
     case fo => {
-      fo.operation match {
-        case Operation.Create => if (fo.origin.isDirectory) {
-          fo.destination.mkdirs()
-          fo.origin.listFiles().foreach {
-            case o => add(FileOperation(o, origin2Destination(o), Operation.Create))
+      // TODO: output total data to copy, current data progress, time taken for current, remove origin, size of current
+      try {
+        fo.operation match {
+          case Operation.Create => if (fo.origin.isDirectory) {
+            fo.destination.mkdirs()
+            fo.origin.listFiles().foreach {
+              case o => add(FileOperation(o, origin2Destination(o), Operation.Create))
+            }
+          } else {
+            print(s"* Create: ${fo.destination.getAbsolutePath} ... ")
+            val time = Time.elapsed {
+              IO.copy(fo.origin, fo.destination)
+            }
+            fo.destination.setLastModified(fo.origin.lastModified())
+            println(s"Completed in ${Time.elapsed(time).shorthand}")
           }
-        } else {
-          print(s"\t\t* Create: ${fo.origin.getAbsolutePath} to ${fo.destination.getAbsolutePath} ... ")
-          IO.copy(fo.origin, fo.destination)
-          fo.destination.setLastModified(fo.origin.lastModified())
-          println("COMPLETE")
+          case Operation.Update => {
+            print(s"* Update: ${fo.destination.getAbsolutePath} ... ")
+            val time = Time.elapsed {
+              IO.copy(fo.origin, fo.destination)
+            }
+            fo.destination.setLastModified(fo.origin.lastModified())
+            println(s"Completed in ${Time.elapsed(time).shorthand}")
+          }
+          case Operation.Delete => {
+            print(s"* Delete: ${fo.destination.getAbsolutePath} ... ")
+            val time = Time.elapsed {
+              IO.delete(fo.destination)
+            }
+            println(s"Completed in ${Time.elapsed(time).shorthand}")
+          }
         }
-        case Operation.Update => {
-          print(s"\t\t* Update: ${fo.origin.getAbsolutePath} to ${fo.destination.getAbsolutePath} ... ")
-          IO.copy(fo.origin, fo.destination)
-          fo.destination.setLastModified(fo.origin.lastModified())
-          println("COMPLETE")
-        }
-        case Operation.Delete => {
-          print(s"\t\t* Delete: ${fo.destination.getAbsolutePath} ... ")
-          IO.delete(fo.destination)
-          println("COMPLETE")
-        }
+      } catch {
+        case t: Throwable => throw new RuntimeException(s"Failed to ${fo.operation} ${fo.origin.getName} to ${fo.destination.getName}.", t)
       }
       sync()
     }
