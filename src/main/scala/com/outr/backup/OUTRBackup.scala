@@ -3,6 +3,7 @@ package com.outr.backup
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicLong
+import com.twitter.util.StorageUnit
 import org.powerscala.event.Listenable
 import org.powerscala.enum.{Enumerated, EnumEntry}
 import scala.annotation.tailrec
@@ -41,6 +42,7 @@ object OUTRBackup {
 }
 
 class BackupInstance(originDirectory: File, destinationDirectory: File) extends Listenable {
+  val started = System.currentTimeMillis()
   val originPath = originDirectory.getAbsolutePath
   val destinationPath = destinationDirectory.getAbsolutePath
 
@@ -164,6 +166,9 @@ class BackupInstance(originDirectory: File, destinationDirectory: File) extends 
     case fo => {
       // TODO: output total data to copy, current data progress, time taken for current, remove origin, size of current
       try {
+        val copied = new StorageUnit(statDataCopied.get()).toHuman()
+        val toCopy = new StorageUnit(statDataToCopy.get()).toHuman()
+        val elapsed = Time.elapsed(System.currentTimeMillis() - started).shorthand
         fo.operation match {
           case Operation.Create => if (fo.origin.isDirectory) {
             fo.destination.mkdirs()
@@ -171,27 +176,29 @@ class BackupInstance(originDirectory: File, destinationDirectory: File) extends 
               case o => add(FileOperation(o, origin2Destination(o), Operation.Create))
             }
           } else {
-            print(s"* Create: ${fo.destination.getAbsolutePath} ... ")
+            print(s"* Create: ${fo.destination.getAbsolutePath} (${new StorageUnit(fo.origin.length()).toHuman()}) [$copied of $toCopy] ... ")
             val time = Time.elapsed {
               IO.copy(fo.origin, fo.destination)
             }
+            statDataCopied.addAndGet(fo.origin.length())
             fo.destination.setLastModified(fo.origin.lastModified())
-            println(s"Completed in ${Time.elapsed(time).shorthand}")
+            println(s"${Time.elapsed(time).shorthand}, Elapsed: $elapsed")
           }
           case Operation.Update => {
-            print(s"* Update: ${fo.destination.getAbsolutePath} ... ")
+            print(s"* Update: ${fo.destination.getAbsolutePath} (${new StorageUnit(fo.origin.length()).toHuman()}) [$copied of $toCopy] ... ")
             val time = Time.elapsed {
               IO.copy(fo.origin, fo.destination)
             }
+            statDataCopied.addAndGet(fo.origin.length())
             fo.destination.setLastModified(fo.origin.lastModified())
-            println(s"Completed in ${Time.elapsed(time).shorthand}")
+            println(s"${Time.elapsed(time).shorthand}, Elapsed: $elapsed")
           }
           case Operation.Delete => {
-            print(s"* Delete: ${fo.destination.getAbsolutePath} ... ")
+            print(s"* Delete: ${fo.destination.getAbsolutePath} (${new StorageUnit(fo.origin.length()).toHuman()}) [$copied of $toCopy] ... ")
             val time = Time.elapsed {
               IO.delete(fo.destination)
             }
-            println(s"Completed in ${Time.elapsed(time).shorthand}")
+            println(s"${Time.elapsed(time).shorthand}, Elapsed: $elapsed")
           }
         }
       } catch {

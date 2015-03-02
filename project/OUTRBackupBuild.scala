@@ -6,12 +6,13 @@ import sbtassembly._
 import sbtassembly.AssemblyPlugin._
 
 object OUTRBackupBuild extends Build {
-  val baseSettings = Defaults.defaultSettings ++ Seq(
-    version := "1.0.0-SNAPSHOT",
+  val baseSettings = Defaults.coreDefaultSettings ++ Seq(
+    version := "1.0.1-SNAPSHOT",
     organization := "com.outr.backup",
     scalaVersion := "2.11.5",
     libraryDependencies ++= Seq(
-      Dependencies.PowerScalaProperty
+      Dependencies.powerScalaProperty,
+      Dependencies.collUtils
     ),
     scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature"),
     resolvers ++= Seq("Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/"),
@@ -40,5 +41,6 @@ object OUTRBackupBuild extends Build {
 object Dependencies {
   private val PowerScalaVersion = "1.6.8-SNAPSHOT"
 
-  val PowerScalaProperty = "org.powerscala" %% "powerscala-property" % PowerScalaVersion
+  val powerScalaProperty = "org.powerscala" %% "powerscala-property" % PowerScalaVersion
+  val collUtils = "com.twitter" %% "util-collection" % "6.23.0"
 }
