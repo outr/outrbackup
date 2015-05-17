@@ -9,7 +9,7 @@ object OUTRBackupBuild extends Build {
   val baseSettings = Defaults.coreDefaultSettings ++ Seq(
     version := "1.0.1-SNAPSHOT",
     organization := "com.outr.backup",
-    scalaVersion := "2.11.5",
+    scalaVersion := "2.11.6",
     libraryDependencies ++= Seq(
       Dependencies.powerScalaProperty,
       Dependencies.collUtils
@@ -39,8 +39,8 @@ object OUTRBackupBuild extends Build {
 }
 
 object Dependencies {
-  private val PowerScalaVersion = "1.6.8-SNAPSHOT"
+  private val PowerScalaVersion = "1.6.9-SNAPSHOT"
 
   val powerScalaProperty = "org.powerscala" %% "powerscala-property" % PowerScalaVersion
-  val collUtils = "com.twitter" %% "util-collection" % "6.23.0"
+  val collUtils = "com.twitter" %% "util-collection" % "6.24.0"
 }

@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.AtomicLong
 import com.twitter.util.StorageUnit
 import org.powerscala.event.Listenable
 import org.powerscala.enum.{Enumerated, EnumEntry}
+import org.powerscala.log.Logging
 import scala.annotation.tailrec
 import org.powerscala.concurrent.{AtomicInt, Executor, Time}
 import org.powerscala.IO
@@ -13,7 +14,7 @@ import org.powerscala.IO
 /**
  * @author Matt Hicks <matt@outr.com>
  */
-object OUTRBackup {
+object OUTRBackup extends Logging {
   def main(args: Array[String]): Unit = {
     if (args.length != 2) {
       println("Usage: OUTRBackup <origin directory> <destination directory>")
@@ -26,22 +27,22 @@ object OUTRBackup {
 
   def backup(origin: File, destination: File) = {
     val instance = new BackupInstance(origin.getCanonicalFile, destination.getCanonicalFile)
-    println("\tIndexing changes...")
+    info("\tIndexing changes...")
     val indexedIn = Time.elapsed {
       instance.index(threads = 8)
     }
-    println(s"\tIndexed in $indexedIn seconds")
+    info(s"\tIndexed in $indexedIn seconds")
 //    instance.dump()
-    println("\tSynchronizing changes...")
+    info("\tSynchronizing changes...")
     val syncIn = Time.elapsed {
       instance.sync()
     }
-    println(s"\tSynchronized in $syncIn seconds")
+    info(s"\tSynchronized in $syncIn seconds")
     instance.dump()
   }
 }
 
-class BackupInstance(originDirectory: File, destinationDirectory: File) extends Listenable {
+class BackupInstance(originDirectory: File, destinationDirectory: File) extends Listenable with Logging {
   val started = System.currentTimeMillis()
   val originPath = originDirectory.getAbsolutePath
   val destinationPath = destinationDirectory.getAbsolutePath
@@ -155,13 +156,34 @@ class BackupInstance(originDirectory: File, destinationDirectory: File) extends 
   }
 
   def dump() = {
-    println(s"\tFiles Examined: ${statFiles()}, Directories Examined: ${statDirectories()}")
-    println(s"\tDirectories - Create: ${statDirectoriesToCreate()}, Update: ${statDirectoriesToUpdate()}, Delete: ${statDirectoriesToDelete()}")
-    println(s"\tFiles - Create: ${statFilesToCreate()}, Update: ${statFilesToUpdate()}, Delete: ${statFilesToDelete()}")
+    info(s"\tFiles Examined: ${statFiles()}, Directories Examined: ${statDirectories()}")
+    info(s"\tDirectories - Create: ${statDirectoriesToCreate()}, Update: ${statDirectoriesToUpdate()}, Delete: ${statDirectoriesToDelete()}")
+    info(s"\tFiles - Create: ${statFilesToCreate()}, Update: ${statFilesToUpdate()}, Delete: ${statFilesToDelete()}")
+  }
+
+  private val syncThreads = new AtomicInt(0)
+
+  def sync(threads: Int = 2) = {
+    (0 until threads).foreach(index => syncThread())
+
+    while (syncThreads() > 0) {
+      Time.sleep(0.5)
+    }
+  }
+
+  private def syncThread() = {
+    syncThreads += 1
+    Executor.invoke {
+      try {
+        syncInternal()
+      } finally {
+        syncThreads -= 1
+      }
+    }
   }
 
   @tailrec
-  final def sync(): Unit = fileOperations.poll() match {
+  private def syncInternal(): Unit = fileOperations.poll() match {
     case null => // Nothing left to do
     case fo => {
       // TODO: output total data to copy, current data progress, time taken for current, remove origin, size of current
@@ -182,7 +204,7 @@ class BackupInstance(originDirectory: File, destinationDirectory: File) extends 
             }
             statDataCopied.addAndGet(fo.origin.length())
             fo.destination.setLastModified(fo.origin.lastModified())
-            println(s"${Time.elapsed(time).shorthand}, Elapsed: $elapsed")
+            info(s"${Time.elapsed(time).shorthand}, Elapsed: $elapsed")
           }
           case Operation.Update => {
             print(s"* Update: ${fo.destination.getAbsolutePath} (${new StorageUnit(fo.origin.length()).toHuman()}) [$copied of $toCopy] ... ")
@@ -191,20 +213,20 @@ class BackupInstance(originDirectory: File, destinationDirectory: File) extends 
             }
             statDataCopied.addAndGet(fo.origin.length())
             fo.destination.setLastModified(fo.origin.lastModified())
-            println(s"${Time.elapsed(time).shorthand}, Elapsed: $elapsed")
+            info(s"${Time.elapsed(time).shorthand}, Elapsed: $elapsed")
           }
           case Operation.Delete => {
             print(s"* Delete: ${fo.destination.getAbsolutePath} (${new StorageUnit(fo.origin.length()).toHuman()}) [$copied of $toCopy] ... ")
             val time = Time.elapsed {
               IO.delete(fo.destination)
             }
-            println(s"${Time.elapsed(time).shorthand}, Elapsed: $elapsed")
+            info(s"${Time.elapsed(time).shorthand}, Elapsed: $elapsed")
           }
         }
       } catch {
         case t: Throwable => throw new RuntimeException(s"Failed to ${fo.operation} ${fo.origin.getName} to ${fo.destination.getName}.", t)
       }
-      sync()
+      syncInternal()
     }
   }
 
@@ -227,10 +249,12 @@ class BackupInstance(originDirectory: File, destinationDirectory: File) extends 
 
 case class FileOperation(origin: File, destination: File, operation: Operation)
 
-class Operation private() extends EnumEntry
+sealed abstract class Operation extends EnumEntry
 
 object Operation extends Enumerated[Operation] {
-  val Create = new Operation
-  val Update = new Operation
-  val Delete = new Operation
+  case object Create extends Operation
+  case object Update extends Operation
+  case object Delete extends Operation
+
+  val values = findValues.toVector
 }
