@@ -10,6 +10,7 @@ import org.powerscala.log.Logging
 import scala.annotation.tailrec
 import org.powerscala.concurrent.{AtomicInt, Executor, Time}
 import org.powerscala.IO
+import org.powerscala.console.Console
 
 /**
  * @author Matt Hicks <matt@outr.com>
@@ -23,23 +24,41 @@ object OUTRBackup extends Logging {
       val destination = new File(args(1))
       backup(origin, destination)
     }
+
+//    (0 until 10).foreach { index =>
+//      Console.write(Console.Character.NewLine, "Testing ", Console.Color.Red, "interesting", Console.Effect.Reset, s" and awesome! ${Console.width}", Console.Control.AlignRight, "On the right!")
+//      Thread.sleep(1000)
+//      Console.replace(Console.Control.AlignRight, Console.Color.Blue, "Super cool!")
+//    }
+//    Console.write(Console.Effect.Reset, Console.Character.Return, Console.Character.NewLine)
   }
 
   def backup(origin: File, destination: File) = {
     val instance = new BackupInstance(origin.getCanonicalFile, destination.getCanonicalFile)
-    info("\tIndexing changes...")
+    info(s"Indexing changes for ${origin.getAbsolutePath}...")
     val indexedIn = Time.elapsed {
       instance.index(threads = 8)
     }
-    info(s"\tIndexed in $indexedIn seconds")
+    info(s"Indexed in $indexedIn seconds")
 //    instance.dump()
-    info("\tSynchronizing changes...")
+    info("Synchronizing changes...")
     val syncIn = Time.elapsed {
       instance.sync()
     }
-    info(s"\tSynchronized in $syncIn seconds")
+    info(s"Synchronized in $syncIn seconds")
     instance.dump()
   }
+
+  // TODO: create Console manager to handle output:
+  /*
+  Console.line("Testing ", Console.Color.Red, "interesting", Console.Effect.Reset, s" and awesome! ${Console.width}")
+      Thread.sleep(1000)
+      Console.replace("Super cool!")
+   */
+
+  // <blue>Create</blue> /file/path/file.ext                                           100 MiB in 57s
+  // <blue>Create</blue> /file/path/file.ext                                  15 MiB of 350 MiB - 23s
+  // Elapsed: 57m, Remaining: 2.3h                                              47.0 GiB of 443.7 GiB
 }
 
 class BackupInstance(originDirectory: File, destinationDirectory: File) extends Listenable with Logging {
@@ -123,7 +142,9 @@ class BackupInstance(originDirectory: File, destinationDirectory: File) extends 
         } else {
           // Check the origin list of files to make sure they exist
           try {
-            origin.listFiles().foreach {
+            val files = origin.listFiles()
+            if (files == null) throw new RuntimeException(s"Files listing is null for ${origin.getAbsolutePath}")
+            files.foreach {
               case o if o.isDirectory => directoriesToIndex.add(o)
               case o => {
                 statFiles += 1
