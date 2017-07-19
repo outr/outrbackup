@@ -39,7 +39,7 @@ object OUTRBackupBuild extends Build {
 }
 
 object Dependencies {
-  private val PowerScalaVersion = "1.6.11-SNAPSHOT"
+  private val PowerScalaVersion = "1.6.11"
 
   val powerScalaProperty = "org.powerscala" %% "powerscala-property" % PowerScalaVersion
   val collUtils = "com.twitter" %% "util-collection" % "6.24.0"
